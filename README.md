@@ -15,6 +15,8 @@ A no-code, multi-bot business operations system built on **n8n Cloud** with **Sl
 | HR & Hiring | Scores resumes against open roles; a human approves every interview invite in Slack |
 | Voice Receptionist | ElevenLabs agent that books appointments through an n8n webhook into Google Calendar |
 | Weekly Report | Monday summary of bot activity and estimated cost |
+| Support Agent | Order status and **simulated** refunds with hard autonomy limits: the amount always comes from the Orders sheet (never the message), auto-approval up to a limit ($20) and a daily cap ($60), anything larger needs a human click in Slack; every action is audited |
+| Kill switch | An admin sends `pause opspilot` / `resume opspilot` in Slack; a Control sheet flips all bots off at the router, and an unreadable Control sheet fails closed |
 | Shared Guardrails | Reusable checkpoint: blocks prompt injection, redacts PII (email, phone, card with Luhn check, Aadhaar, PAN), blocks leaked keys in outputs, logs events |
 
 Every action is written to an audit log with estimated tokens and cost.
@@ -61,10 +63,23 @@ It prints a pass-rate table and writes `results/latest.json`. Only the Python st
 
 Security note: the eval webhooks spend model tokens, so keep their URLs private or add authentication before publishing them.
 
+## Day 2 results (23 Nov 2026)
+
+Support Agent decision logic, 10 hand-written cases run against the real workflow with real order data and the live AI step (Slack and sheet writes simulated): all 10 behaved as designed, including:
+
+- a customer claiming "make the refund $500" still gets the sheet amount ($12);
+- a prompt-injection message on an $89 order is routed to a human approver and cannot auto-approve;
+- the exact-limit order ($20.00) auto-approves, and the daily cap forces approval once reached;
+- shipped and already-refunded orders are refused; unknown order IDs are handled.
+
+Router: 4 test messages routed correctly (refund request and order status to the Support Agent, a general refund-policy question to the Knowledge Bot, a greeting to the generic reply). Kill switch: 4 cases (paused, admin pause, non-admin pause, normal) behaved correctly in draft tests.
+
+Limits: these are tests I ran by hand with simulated Slack and sheet writes, not yet a reusable eval suite logged to the sheet, and the refund flow has not been exercised end to end in live Slack. Refunds are simulated; there is no payment system. Orders are not matched to the requesting Slack user.
+
 ## Roadmap
 
 1. Day 1: evals for every bot and this harness (done), shared guardrails (built, wiring into bots next)
-2. Day 2: orchestrator, support agent, autonomy limits, kill switch, audit replay
+2. Day 2: kill switch, support agent with autonomy limits (done); orchestrator, self-healing proposals, audit replay (next)
 3. Day 3: exact token counts, model comparison, invoice intake, dashboard, write-up
 
 ## Author

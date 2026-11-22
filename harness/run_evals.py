@@ -28,6 +28,7 @@ BOTS = {
     "policy": ("Policy Brain", "opspilot-eval-policy"),
     "data": ("Data Analyst", "opspilot-eval-data"),
     "hr": ("HR Resume Scoring", "opspilot-eval-hr"),
+    "guardrails": ("Shared Guardrails", "opspilot-eval-guardrails"),
 }
 
 

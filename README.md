@@ -76,6 +76,19 @@ Router: 4 test messages routed correctly (refund request and order status to the
 
 Limits: these are tests I ran by hand with simulated Slack and sheet writes, not yet a reusable eval suite logged to the sheet, and the refund flow has not been exercised end to end in live Slack. Refunds are simulated; there is no payment system. Orders are not matched to the requesting Slack user.
 
+## What production would require
+
+This is a working prototype / reference architecture, not a production system. Known gaps:
+
+- **Evals**: small (7-19 cases per bot), self-written and tuned against earlier failures; a 100% pass rate does not predict real-world accuracy. Guardrails are rule-based and bypassable (first adversarial run: 1/6).
+- **Identity and permissions**: orders are not matched to the requesting Slack user; admin rights come from one Slack ID in a sheet.
+- **Storage**: Google Sheets is the database (no transactions, parallel appends can lose rows, API quotas). A real deployment needs Postgres or similar.
+- **Payments**: refunds are simulated; no payment system, idempotency or reconciliation.
+- **Operations**: no failure alerting, retries or dead-letter handling; self-healing and audit replay are not built yet.
+- **Cost and abuse**: no rate limiting or spend cap; token and cost figures are estimates.
+- **Security and privacy**: no formal security review, secrets-rotation plan or PII retention policy (resume data needs consent and retention rules).
+- **Live verification**: the refund flow and kill switch are tested with simulated sinks, not yet end to end in Slack.
+
 ## Roadmap
 
 1. Day 1: evals for every bot and this harness (done), shared guardrails (built, wiring into bots next)

@@ -16,6 +16,7 @@ A no-code, multi-bot business operations system built on **n8n Cloud** with **Sl
 | Voice Receptionist | ElevenLabs agent that books appointments through an n8n webhook into Google Calendar |
 | Weekly Report | Monday summary of bot activity and estimated cost |
 | Support Agent | Order status and **simulated** refunds with hard autonomy limits: the amount always comes from the Orders sheet (never the message), auto-approval up to a limit ($20) and a daily cap ($60), anything larger needs a human click in Slack; every action is audited |
+| Self-Healing Proposer | Error workflow attached to every bot. When a run fails it redacts secrets from the error, asks an AI step for a likely cause and suggested fix, posts that to the approver channel and logs it. **Propose-only**: it has no ability to edit workflows, retry, or touch data. Retry is never marked safe for bots that move money or send messages |
 | Kill switch | An admin sends `pause opspilot` / `resume opspilot` in Slack; a Control sheet flips all bots off at the router, and an unreadable Control sheet fails closed |
 | Shared Guardrails | Reusable checkpoint: blocks prompt injection, redacts PII (email, phone, card with Luhn check, Aadhaar, PAN), blocks leaked keys in outputs, logs events |
 
@@ -74,6 +75,8 @@ Support Agent decision logic, 10 hand-written cases run against the real workflo
 
 Router: 4 test messages routed correctly (refund request and order status to the Support Agent, a general refund-policy question to the Knowledge Bot, a greeting to the generic reply). Kill switch: 4 cases (paused, admin pause, non-admin pause, normal) behaved correctly in draft tests.
 
+Live checks (23 Nov, simulated refunds): `refund ORD-1001` auto-approved at $12 and a repeat was refused; `refund ORD-1004` ($45) went to a human approver and, after a click, was recorded as "human (Slack click)"; `pause opspilot` / `resume opspilot` flipped the Control sheet and were audited. Self-healing: 4 hand-built failures (credential 403, code bug, hostile error text containing a fake key and an injected instruction, a retry-safety check) plus one real deliberate failure of a throwaway workflow, which triggered the handler by itself, posted to Slack and logged. The fake key was redacted and the injected instruction was not followed. One observation: the AI sometimes says a retry is "safe" where I would not, so that field is overridden in code for money/messaging bots. Diagnoses are one model's guess, not verified fixes.
+
 Limits: these are tests I ran by hand with simulated Slack and sheet writes, not yet a reusable eval suite logged to the sheet, and the refund flow has not been exercised end to end in live Slack. Refunds are simulated; there is no payment system. Orders are not matched to the requesting Slack user.
 
 ## What production would require
@@ -92,7 +95,7 @@ This is a working prototype / reference architecture, not a production system. K
 ## Roadmap
 
 1. Day 1: evals for every bot and this harness (done), shared guardrails (built, wiring into bots next)
-2. Day 2: kill switch, support agent with autonomy limits (done); orchestrator, self-healing proposals, audit replay (next)
+2. Day 2: kill switch, support agent with autonomy limits, propose-only self-healing (done); self-healing proposals (done); orchestrator and audit replay (next)
 3. Day 3: exact token counts, model comparison, invoice intake, dashboard, write-up
 
 ## Author

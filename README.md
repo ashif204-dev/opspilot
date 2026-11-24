@@ -11,7 +11,7 @@ A no-code, multi-bot business operations system built on **n8n Cloud** with **Sl
 | Knowledge Bot | Answers questions from a Qdrant knowledge base with sources |
 | Ops Coordinator | Turns Slack messages into tasks with due dates |
 | Policy Brain | Answers HR policy questions from the real policy documents, declines otherwise |
-| Data Analyst | Plans a query over the sales sheet; the calculation itself is deterministic code, not the LLM |
+| Data Analyst | Plans a query over the sales sheet; the calculation itself is deterministic code, not the LLM. The LLM only words the explanation, and a code check compares every number in that wording with the computed table; if any number does not match, the reply uses a plain summary built from the table instead (found after a test where the wording turned $150 into $150,000). The check covers numbers only, not wording |
 | HR & Hiring | Scores resumes against open roles; a human approves every interview invite in Slack |
 | Voice Receptionist | ElevenLabs agent that books appointments through an n8n webhook into Google Calendar |
 | Weekly Report | Monday summary of bot activity and estimated cost |

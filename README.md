@@ -85,6 +85,26 @@ Audit replay: 4 logic cases with real sheet data (known order, unknown order, no
 
 Limits: these are tests I ran by hand with simulated Slack and sheet writes, not yet a reusable eval suite logged to the sheet, and the refund flow has not been exercised end to end in live Slack. Refunds are simulated; there is no payment system. Orders are not matched to the requesting Slack user.
 
+## Cost per request (measured)
+
+Measured from one live Slack message that used four AI calls: "refund ORD-1004, it arrived broken, and add a task to follow up with the customer by Friday". All calls use gpt-4o-mini. Token counts come from n8n's execution records.
+
+| Step | Tokens in | Tokens out | Source |
+|---|---|---|---|
+| Router (intent) | 768 | 17 | reported by the API |
+| Orchestrator planner | 629 | 46 | n8n estimate |
+| Ops Coordinator (task) | 737 | 31 | reported by the API |
+| Support Agent (intent) | 426 | 18 | n8n estimate |
+| **Total** | **2,560** | **112** | |
+
+At list prices of $0.15 per million input tokens and $0.60 per million output tokens, that message cost about **$0.00045**, roughly 2,200 such messages per dollar. A single-bot message costs less, about $0.0001 to $0.0002, because it uses only the router and one bot.
+
+What this measurement also showed:
+- Two of the four calls (the planner and the Support Agent) use the OpenAI Responses API, which n8n does not get usage numbers back from, so those two counts are n8n's own estimates. The one pair I could compare (Ops Coordinator) was within about 1 percent: n8n estimated 730 input tokens and the API reported 737.
+- The token and cost estimates the Audit Log has been writing (for example 238 in / 22 out for the Ops Coordinator call above) undercount by roughly 3 times, because they count only the user's message and not the system prompt or output format instructions. Treat the Audit Log token columns as lower bounds until they are replaced by the tracker below.
+- Billing here goes through n8n Cloud's AI credits, so the dollar figure is the list-price equivalent, not an invoice line.
+- This is one message, not an average. A proper average needs the scheduled tracker (next step), which reads every execution.
+
 ## What production would require
 
 This is a working prototype / reference architecture, not a production system. Known gaps:

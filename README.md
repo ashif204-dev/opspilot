@@ -97,7 +97,7 @@ Measured from one live Slack message that used four AI calls: "refund ORD-1004, 
 | Support Agent (intent) | 426 | 18 | n8n estimate |
 | **Total** | **2,560** | **112** | |
 
-At list prices of $0.15 per million input tokens and $0.60 per million output tokens, that message cost about **$0.00045**, roughly 2,200 such messages per dollar. A single-bot message costs less, about $0.0001 to $0.0002, because it uses only the router and one bot.
+At list prices of $0.15 per million input tokens and $0.60 per million output tokens, that message cost about **$0.00045**, roughly 2,200 such messages per dollar. A single-bot message costs less, about $0.0002 to $0.0003 (router plus one bot, for example 768+737 input tokens).
 
 What this measurement also showed:
 - Two of the four calls (the planner and the Support Agent) use the OpenAI Responses API, which n8n does not get usage numbers back from, so those two counts are n8n's own estimates. The one pair I could compare (Ops Coordinator) was within about 1 percent: n8n estimated 730 input tokens and the API reported 737.

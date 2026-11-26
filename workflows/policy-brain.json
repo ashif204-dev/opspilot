@@ -1,0 +1,439 @@
+{
+  "name": "Policy Brain",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "user"
+            },
+            {
+              "name": "channel"
+            },
+            {
+              "name": "thread_ts"
+            }
+          ]
+        }
+      },
+      "id": "c23300f9-2950-4716-8e80-d0eb8db9b936",
+      "name": "Called by Router",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1l1EZsDADddSByWpPbK9Fku4vg4WVuVJz"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {}
+      },
+      "id": "87ef3a10-9c1e-403b-b916-eaee77723236",
+      "name": "List policy docs",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        256,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "lB3XGnK1TysRSPNr",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain"
+            }
+          }
+        }
+      },
+      "id": "c626cef8-43dd-4a08-93bb-f06f79d56922",
+      "name": "Download doc as text",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        528,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "lB3XGnK1TysRSPNr",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "destinationKey": "content",
+        "options": {}
+      },
+      "id": "f72a5b7a-2c01-4435-8512-dca6686204a3",
+      "name": "Extract text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const names = $('List policy docs').all();\nconst parts = $input.all().map((item, i) => {\n  const name = names[i] ? names[i].json.name : 'Document ' + (i + 1);\n  return '=== SOURCE: ' + name + ' ===\\n' + (item.json.content || '');\n});\nconst q = $('Called by Router').first().json;\nreturn [{ json: { policies: parts.join('\\n\\n'), question: q.text, user: q.user, channel: q.channel, thread_ts: q.thread_ts } }];"
+      },
+      "id": "b34df634-2b70-4dac-958a-ed7b767bcada",
+      "name": "Combine policies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Employee question: {{ $json.question }}\n\nCOMPANY POLICY DOCUMENTS:\n{{ $json.policies }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the company HR policy assistant. Answer ONLY using the policy documents provided. Be short and clear (max 5 lines). End with a line \"Source: <document name>\". If the documents do not answer the question, reply exactly: \"I could not find this in the policy documents. I have flagged it for HR.\" and give no Source line. Never invent numbers or rules."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "bb477089-f970-432a-893a-0abfe7867ca1",
+      "name": "Answer from policies",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1296,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Combine policies').item.json.channel }}"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $('Combine policies').item.json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "c69e8a11-2923-48ed-bb32-e6c8ef33823e",
+      "name": "Reply with answer",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1664,
+        304
+      ],
+      "webhookId": "f915d1cd-403a-4c2b-af69-279f4b28e376",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Policy Brain",
+            "Action": "Answered policy question",
+            "Target": "={{ $('Combine policies').item.json.question }}",
+            "Approved by": "n/a (internal)",
+            "Result": "={{ $(\"Answer from policies\").item.json.text }}",
+            "Cost EUR (est.)": "={{ (() => { const c = $('Combine policies').first().json; const i = Math.ceil(((c.policies || '').length + (c.question || '').length + 420) / 4); const o = Math.ceil(String($('Answer from policies').first().json.text || '').length / 4); return +((i * 0.15 + o * 0.60) / 1e6 * 0.92).toFixed(6); })() }}",
+            "Tokens in (est.)": "={{ (() => { const c = $('Combine policies').first().json; return Math.ceil(((c.policies || '').length + (c.question || '').length + 420) / 4); })() }}",
+            "Tokens out (est.)": "={{ Math.ceil(String($('Answer from policies').first().json.text || '').length / 4) }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens in (est.)",
+              "id": "Tokens in (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens out (est.)",
+              "id": "Tokens out (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Cost EUR (est.)",
+              "id": "Cost EUR (est.)",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a978300-229d-43c6-a900-45e16b768833",
+      "name": "Log to Audit Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1920,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "gpt-4o-mini",
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "de6dfead-4a14-4b32-9311-f0a794bc2672",
+      "name": "OpenAI Chat Model (policy)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1296,
+        528
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Called by Router": {
+      "main": [
+        [
+          {
+            "node": "List policy docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List policy docs": {
+      "main": [
+        [
+          {
+            "node": "Download doc as text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download doc as text": {
+      "main": [
+        [
+          {
+            "node": "Extract text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text": {
+      "main": [
+        [
+          {
+            "node": "Combine policies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine policies": {
+      "main": [
+        [
+          {
+            "node": "Answer from policies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer from policies": {
+      "main": [
+        [
+          {
+            "node": "Reply with answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply with answer": {
+      "main": [
+        [
+          {
+            "node": "Log to Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (policy)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer from policies",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "14e90FSSINOYHY9n",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "b40d7971-2c50-4c3b-bf36-4f86fd6a1130",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "YF5x6dHirl12sqcK",
+  "tags": []
+}

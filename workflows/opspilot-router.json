@@ -1,0 +1,1706 @@
+{
+  "name": "OpsPilot Router",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "any_event"
+        ],
+        "watchWorkspace": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c00eca6c-8992-4fda-9406-0b40ff033a37",
+      "name": "Slack Trigger",
+      "webhookId": "1a978a19-c749-42e1-80de-28455897c512",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "858871f9-0efa-4cf7-a068-aea5d6d5cfd1",
+              "leftValue": "={{ $json.bot_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c99d8f57-0aef-4c80-9dbb-7b016325ea92",
+              "leftValue": "={{ $json.subtype }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "3b23447b-f9d7-49ef-8d7f-8a49bf4c68ad",
+      "name": "Ignore bot messages"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-0001-4000-8000-000000000001",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.text.replace(/<@[A-Z0-9]+>/g, '').trim() }}"
+            },
+            {
+              "id": "a1b2c3d4-0002-4000-8000-000000000002",
+              "name": "user",
+              "type": "string",
+              "value": "={{ $json.user }}"
+            },
+            {
+              "id": "a1b2c3d4-0003-4000-8000-000000000003",
+              "name": "channel",
+              "type": "string",
+              "value": "={{ $json.channel }}"
+            },
+            {
+              "id": "a1b2c3d4-0004-4000-8000-000000000004",
+              "name": "thread_ts",
+              "type": "string",
+              "value": "={{ $json.thread_ts || $json.ts }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "caefaff3-81a1-448b-99fb-68088a00fe81",
+      "name": "Clean message"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You sort workplace messages from employees into one intent.\nReply only in the required format.\n\nmulti = the message contains TWO OR MORE separate requests that need different actions, for example 'refund ORD-1004 and add a task to follow up', 'where is ORD-1002 and how many casual leaves do I get', 'add a task and show revenue by region'. A single request, even a long one, is never multi. A message with one request that has a reason or detail attached is not multi.\npolicy = questions about leave entitlements, holidays and the general HR handbook.\nhiring = questions about candidates, resumes, interviews, job roles.\nops = adding, updating or asking about tasks, deadlines or daily updates.\nanalytics = questions about sales data or numbers: revenue, profit, cost, units, orders, regions, products, channels, trends, top or bottom performers, charts or comparisons of sales.\nsupport = a request to DO something with an order: asking for a refund, a return, or the status or location of an order, usually mentioning an order ID like ORD-1001. Any message that asks for a refund is support, even if it mentions a reason.\naudit = ONLY a question about what the bots already did: the history, audit trail or replay of past actions, or why a past decision was made. Examples: 'show history for ORD-1004', 'why was ORD-1004 refunded', 'replay the last 5 actions', 'what did the bots do recently'. A request to perform an action is never audit.\nknowledge = questions about company documents other than leave: IT security rules (passwords, MFA, devices, phishing), expense claims and travel limits, onboarding and probation, working hours and remote work or hybrid rules, and product plans, pricing, trials, general refund policy, support and compliance (general policy questions that are not about a specific order).\nother = anything else, including greetings.\n\nGive a confidence from 0 to 1."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "8e16f70f-388c-4abb-a1c0-a49daf1d1607",
+      "name": "Classify intent",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"intent\": \"policy\", \"confidence\": 0.9 }"
+      },
+      "id": "b46b2add-2ff4-4891-83e0-37bcf192cbb7",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        864,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-policy-0001",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "policy"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "policy"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-hiring-0002",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "hiring"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "hiring"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-ops-0003",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "ops"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "ops"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-analytics-0004",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "analytics"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "analytics"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-knowledge-0005",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "knowledge"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "knowledge"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-support-0006",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "support"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "support"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-audit-0007",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "audit"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "audit"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r-multi-0008",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "multi"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "multi"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "id": "488e4d54-592b-4bac-8481-03e5f08ef844",
+      "name": "Route by intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        1024,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Clean message').item.json.channel }}"
+        },
+        "text": "Hi! I can help with leave and HR policy, hiring, tasks, sales analytics and company documents (IT security, expenses, onboarding, remote work, product FAQ). Try: What is the hotel limit for travel?",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $('Clean message').item.json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "de22a0ba-2af7-44f1-a554-f33698ae61cb",
+      "name": "Reply other",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1184,
+        528
+      ],
+      "webhookId": "d8e58dbd-c83e-4e77-8363-78238412883a",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YF5x6dHirl12sqcK"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4d3e13d3-b12f-49b7-98cb-e1f6636a9f39",
+      "name": "Run Policy Brain",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1760,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "DPZfAoNxXuWxyhry"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ba8573f5-a25c-4c9e-b81e-917cc1bb100c",
+      "name": "Run Ops Coordinator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2032,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "yKElwR82n3xRSdWY"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "bbc357bd-b012-4b11-acab-1dd95d745d37",
+      "name": "Run HR & Hiring",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1936,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "gpt-4o-mini",
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "e4eeb509-18bd-45b4-9a04-96dad326d19e",
+      "name": "OpenAI Chat Model (router)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        544,
+        208
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "85qoQ9NNA2OzCx8x"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ad7891a9-36b9-479e-97eb-9f80d1dea737",
+      "name": "Run Data Analyst",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1936,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "9orDJ3PHV0oPAN0G"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "109da644-489b-40e6-8bcb-58524b6a8150",
+      "name": "Run Knowledge Bot",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1776,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XWvJhpbY3EBzGqIY"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "mode",
+              "id": "mode",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "source",
+              "id": "source",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "mode": "input",
+            "source": "router",
+            "text": "={{ $json.text }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "5cd56a92-8fc1-4ba9-896f-cc78b737d4bc",
+      "name": "Guardrails (router)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        336,
+        -144
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $('Ignore bot messages').first().json;\nconst g = $input.first().json || {};\nreturn [{ json: { text: g.clean_text || '', verdict: g.verdict || 'error', reasons: g.reasons || [], user: e.user, channel: e.channel, ts: e.ts, thread_ts: e.thread_ts } }];"
+      },
+      "id": "0c2e2a5b-15ff-4091-95e0-0e452c0569d4",
+      "name": "Guardrail result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.verdict === \"allow\" || $json.verdict === \"redact\" }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "415131d7-7f37-4c98-b180-6bde5014ea1e",
+      "name": "Allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "text": ":no_entry: I can't act on that message because it looks like an attempt to change my instructions. Please rephrase your request.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts || $json.ts }}"
+            }
+          }
+        }
+      },
+      "id": "f86319ad-7525-4463-9523-0b3ff30ed022",
+      "name": "Reply: message blocked",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        -256
+      ],
+      "webhookId": "b2739438-aa8c-423b-912e-d94fb9667e89",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Control"
+        },
+        "options": {}
+      },
+      "id": "c68e95ba-29f9-4bc6-bdca-606ff3476166",
+      "name": "Read control",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        -144
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ev = $('Ignore bot messages').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.Setting);\nconst get = (k) => { const r = rows.find(x => x.Setting === k); return r ? String(r.Value).trim() : ''; };\nconst status = get('Bots status').toUpperCase();\nconst admins = get('Admin Slack IDs').split(',').map(s => s.trim()).filter(Boolean);\nconst base = { text: ev.text, user: ev.user, channel: ev.channel, ts: ev.ts, thread_ts: ev.thread_ts };\nconst m = String(ev.text || '').replace(/<@[A-Z0-9]+>/g, '').trim().match(/^(pause|resume)\\s+opspilot$/i);\nif (m) {\n  const cmd = m[1].toLowerCase();\n  if (admins.indexOf(ev.user) >= 0) {\n    return [{ json: Object.assign({}, base, { route: 'update', new_value: cmd === 'pause' ? 'OFF' : 'ON', reply_text: cmd === 'pause' ? ':pause_button: OpsPilot is now *paused*. All bots stay silent until an admin sends \"resume opspilot\".' : ':arrow_forward: OpsPilot is *resumed* and all bots are active again.' }) }];\n  }\n  return [{ json: Object.assign({}, base, { route: 'reply', reply_text: ':lock: Only admins can pause or resume OpsPilot.' }) }];\n}\nif (status !== 'ON') {\n  return [{ json: Object.assign({}, base, { route: 'reply', reply_text: ':pause_button: OpsPilot is paused by an admin right now. Please try again later.' }) }];\n}\nreturn [{ json: Object.assign({}, base, { route: 'run' }) }];"
+      },
+      "id": "31c8d87d-be0d-48b6-95e1-bdffb08d208c",
+      "name": "Kill switch check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.route === \"run\" }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "fdb4ccc8-c560-45c3-b32e-4e6af66af922",
+      "name": "Bots on?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.route === \"update\" }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "a30b5447-930b-486b-9bd0-bcadabc2d5ab",
+      "name": "Is admin command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Control"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "Setting"
+          ],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Setting",
+              "id": "Setting",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Value",
+              "id": "Value",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Updated by",
+              "id": "Updated by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Updated at",
+              "id": "Updated at",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Setting": "Bots status",
+            "Updated at": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Updated by": "={{ $json.user }}",
+            "Value": "={{ $json.new_value }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "f4ed3639-8671-4a06-8548-d81f97aa6bae",
+      "name": "Update control",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        -64
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "Action": "={{ $('Kill switch check').first().json.new_value === \"OFF\" ? \"Bots paused\" : \"Bots resumed\" }}",
+            "Approved by": "={{ $('Kill switch check').first().json.user }}",
+            "Result": "={{ $('Kill switch check').first().json.new_value }}",
+            "Target": "Control sheet",
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Kill switch"
+          }
+        },
+        "options": {}
+      },
+      "id": "702e77f6-f316-41e7-a87b-99b87f6c3f7a",
+      "name": "Log control change",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        -64
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Kill switch check').first().json.channel }}"
+        },
+        "text": "={{ $('Kill switch check').first().json.reply_text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $('Kill switch check').first().json.thread_ts || $('Kill switch check').first().json.ts }}"
+            }
+          }
+        }
+      },
+      "id": "d9b37a8d-69e2-4f05-8ad6-ae606133cf4c",
+      "name": "Reply: control notice",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        496,
+        -64
+      ],
+      "webhookId": "6408b3eb-89fe-4692-91b8-5fe3ce29fff1",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "VO0chFwLGIEkt56D"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "306ff64c-9923-44f5-9083-ac6b181eaadd",
+      "name": "Run Support Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1904,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "200mrHohlbjrSscI"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "146e35c1-585d-4b92-82bd-accd82ef65d9",
+      "name": "Run Audit Replay",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1904,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "NMGN8600g4pJchI1"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "text",
+              "id": "text",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "user",
+              "id": "user",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "channel",
+              "id": "channel",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "thread_ts",
+              "id": "thread_ts",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "channel": "={{ $('Clean message').item.json.channel }}",
+            "text": "={{ $('Clean message').item.json.text }}",
+            "thread_ts": "={{ $('Clean message').item.json.thread_ts }}",
+            "user": "={{ $('Clean message').item.json.user }}"
+          }
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "676862fc-960b-46ad-9907-98c5f1acf406",
+      "name": "Run Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1904,
+        1200
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ignore bot messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean message": {
+      "main": [
+        [
+          {
+            "node": "Classify intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify intent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify intent": {
+      "main": [
+        [
+          {
+            "node": "Route by intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by intent": {
+      "main": [
+        [
+          {
+            "node": "Run Policy Brain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run HR & Hiring",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Ops Coordinator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Data Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Knowledge Bot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Support Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Audit Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply other",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (router)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify intent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrails (router)": {
+      "main": [
+        [
+          {
+            "node": "Guardrail result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail result": {
+      "main": [
+        [
+          {
+            "node": "Allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allowed?": {
+      "main": [
+        [
+          {
+            "node": "Clean message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: message blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ignore bot messages": {
+      "main": [
+        [
+          {
+            "node": "Read control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read control": {
+      "main": [
+        [
+          {
+            "node": "Kill switch check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kill switch check": {
+      "main": [
+        [
+          {
+            "node": "Bots on?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bots on?": {
+      "main": [
+        [
+          {
+            "node": "Guardrails (router)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is admin command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is admin command?": {
+      "main": [
+        [
+          {
+            "node": "Update control",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: control notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update control": {
+      "main": [
+        [
+          {
+            "node": "Log control change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log control change": {
+      "main": [
+        [
+          {
+            "node": "Reply: control notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "14e90FSSINOYHY9n",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "49cd85e3-b508-4b16-8e80-545ffc0619a9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "mMKr67780nieq5ss",
+  "tags": []
+}

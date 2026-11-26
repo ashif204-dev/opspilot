@@ -1,0 +1,354 @@
+{
+  "name": "Audit Replay",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "user"
+            },
+            {
+              "name": "channel"
+            },
+            {
+              "name": "thread_ts"
+            }
+          ]
+        }
+      },
+      "id": "b4a2a71c-6895-416a-b3fb-fe50198fb438",
+      "name": "Called by Router (audit)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Control"
+        },
+        "options": {}
+      },
+      "id": "bedf48ae-754f-4259-b947-76624b3e663e",
+      "name": "Read control",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "options": {}
+      },
+      "id": "07ad8812-eabe-4927-8507-6acdffee6e68",
+      "name": "Read audit log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Refunds"
+        },
+        "options": {}
+      },
+      "id": "4e9f530f-37e7-46c0-807f-cacbc13c2fac",
+      "name": "Read refunds",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $('Called by Router (audit)').first().json;\nconst dd = function (a) { const seen = {}; const out = []; for (let i = 0; i < a.length; i++) { const k = JSON.stringify(a[i]); if (!seen[k]) { seen[k] = 1; out.push(a[i]); } } return out; };\nconst ctl = dd($('Read control').all().map(function (i) { return i.json; }));\nconst adminRow = ctl.find(function (r) { return r.Setting === 'Admin Slack IDs'; });\nconst admins = String(adminRow ? adminRow.Value : '').split(/[,\\s]+/).filter(function (x) { return x; });\nconst base = { channel: t.channel, thread_ts: t.thread_ts, user: t.user };\nif (admins.indexOf(String(t.user)) < 0) {\n  return [{ json: Object.assign({}, base, { reply_text: ':lock: Audit replay is limited to admins.', log_action: 'Audit replay denied', log_target: 'user ' + t.user, log_result: 'Not an admin' }) }];\n}\nconst clean = function (v, n) { return String(v == null ? '' : v).replace(/<[!#@]/g, '< ').replace(/[\\r\\n]+/g, ' ').slice(0, n); };\nconst audit = dd($('Read audit log').all().map(function (i) { return i.json; })).filter(function (r) { return r.Action; });\nconst refunds = dd($('Read refunds').all().map(function (i) { return i.json; })).filter(function (r) { return r['Order ID']; });\nconst line = function (r) { return '`' + clean(r.Time, 19) + '` *' + clean(r.Workflow, 40) + '*: ' + clean(r.Action, 80) + (r.Target ? ' (' + clean(r.Target, 70) + ')' : '') + ' | approved by: ' + clean(r['Approved by'] || 'n/a', 40) + (r.Result ? ' | ' + clean(r.Result, 100) : ''); };\nconst text = String(t.text || '');\nconst m = text.match(/ORD[-\\s]?(\\d{4})/i);\nlet head = '';\nlet rows = [];\nlet extra = '';\nif (m) {\n  const id = 'ORD-' + m[1];\n  rows = audit.filter(function (r) { return String(r.Target || '').indexOf(id) >= 0; });\n  head = ':mag: *Replay for ' + id + '* (' + rows.length + ' logged action' + (rows.length === 1 ? '' : 's') + ')';\n  const rf = refunds.filter(function (r) { return r['Order ID'] === id; });\n  const limRow = ctl.find(function (r) { return r.Setting === 'Auto refund limit (USD)'; });\n  const capRow = ctl.find(function (r) { return r.Setting === 'Daily auto refund cap (USD)'; });\n  for (let k = 0; k < rf.length; k++) {\n    const r = rf[k];\n    const auto = String(r['Decided by'] || '').indexOf('policy') === 0;\n    extra += '\\n*Refund record:* $' + clean(r['Amount USD'], 10) + ' ' + clean(r.Decision, 20) + ' by ' + clean(r['Decided by'], 40) + ' at ' + clean(r.Time, 19) + (r.Reason ? ', reason given: ' + clean(r.Reason, 80) : '');\n    extra += auto ? '\\n*Why:* auto-approved by policy. The amount was at or under the auto limit (currently $' + clean(limRow ? limRow.Value : '?', 10) + ') and within the daily cap (currently $' + clean(capRow ? capRow.Value : '?', 10) + '). Limits shown are the current values, not necessarily those at the time.' : '\\n*Why:* the amount was over the automatic limit or cap, so a human decided.';\n  }\n} else {\n  const nm = text.match(/(?:last|recent|latest)\\s+(\\d{1,2})/i);\n  const n = nm ? Math.min(10, Math.max(1, Number(nm[1]))) : 5;\n  rows = audit.slice(-n);\n  head = ':mag: *Last ' + rows.length + ' logged actions*';\n}\nlet body = rows.length ? rows.map(line).join('\\n') : '_Nothing logged for that._';\nconst note = '\\n_Built only from the Audit Log and Refunds sheet. Original message text is not stored._';\nlet reply = head + '\\n' + body + extra + note;\nif (reply.length > 3500) { reply = reply.slice(0, 3400) + '\\n... (truncated)' + note; }\nreturn [{ json: Object.assign({}, base, { reply_text: reply, log_action: 'Audit replay viewed', log_target: m ? 'ORD-' + m[1] : 'recent actions', log_result: rows.length + ' rows shown to ' + t.user }) }];"
+      },
+      "id": "d8ad66db-f9ac-4710-9848-587adbe108fa",
+      "name": "Build replay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "text": "={{ $json.reply_text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "1d678fbd-b1d2-4eeb-bce6-428a3725648c",
+      "name": "Reply: replay",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1120,
+        192
+      ],
+      "webhookId": "b930e6bb-6015-444c-80eb-60a4e3893f1c",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Audit Replay",
+            "Action": "={{ $(\"Build replay\").first().json.log_action }}",
+            "Target": "={{ $(\"Build replay\").first().json.log_target }}",
+            "Approved by": "n/a (read-only)",
+            "Result": "={{ $(\"Build replay\").first().json.log_result }}"
+          },
+          "schema": [
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Action",
+              "displayName": "Action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target",
+              "displayName": "Target",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Approved by",
+              "displayName": "Approved by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "17410e3e-e870-4e0c-8688-b7a171bf6fbf",
+      "name": "Log replay view",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1344,
+        192
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Called by Router (audit)": {
+      "main": [
+        [
+          {
+            "node": "Read control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read control": {
+      "main": [
+        [
+          {
+            "node": "Read audit log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read audit log": {
+      "main": [
+        [
+          {
+            "node": "Read refunds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read refunds": {
+      "main": [
+        [
+          {
+            "node": "Build replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build replay": {
+      "main": [
+        [
+          {
+            "node": "Reply: replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply: replay": {
+      "main": [
+        [
+          {
+            "node": "Log replay view",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "14e90FSSINOYHY9n"
+  },
+  "versionId": "b96a7e37-f84a-4a8e-bef1-b9de0c32e8d4",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "200mrHohlbjrSscI",
+  "tags": []
+}

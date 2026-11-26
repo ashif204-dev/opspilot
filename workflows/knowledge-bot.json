@@ -1,0 +1,651 @@
+{
+  "name": "Knowledge Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "user"
+            },
+            {
+              "name": "channel"
+            },
+            {
+              "name": "thread_ts"
+            }
+          ]
+        }
+      },
+      "id": "1a868b08-7897-40f3-b414-d6dac5a3e597",
+      "name": "Called by Router (knowledge)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "company_knowledge"
+        },
+        "prompt": "={{ $json.text }}",
+        "topK": 5,
+        "options": {}
+      },
+      "id": "436e955a-4636-44b2-9ae0-9f5dbb9e34a9",
+      "name": "Search knowledge base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        112
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "qdrantApi": {
+          "id": "idI4nGz0pW4hVhBt",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "bf015833-ddf0-4e0b-b9bd-b51da830925f",
+      "name": "OpenAI Embeddings (query)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $('Called by Router (knowledge)').first().json.text;\nconst items = $input.all().map(i => i.json);\nconst chunks = [];\nitems.forEach((it) => {\n  const d = it.document || it;\n  const text = d.pageContent || '';\n  if (!text.trim()) return;\n  const m = d.metadata || {};\n  chunks.push({ n: chunks.length + 1, source: String(m.source || 'unknown').replace(/\\.[A-Za-z0-9]+$/, ''), text });\n});\nconst context = chunks.map(c => '[' + c.n + '] (source: ' + c.source + ')\\n' + c.text).join('\\n\\n---\\n\\n');\nreturn [{ json: { question: q, context, chunks: chunks.map(c => ({ n: c.n, source: c.source })), hits: chunks.length } }];\n"
+      },
+      "id": "51188135-a983-4f06-8b42-f9cf64b6e44e",
+      "name": "Build context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Question: {{ $json.question }}\n\nContext passages:\n{{ $json.context || \"(no passages found)\" }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You answer employee questions using ONLY the numbered context passages provided.\nRules:\n- Every fact you state must come from the passages. Put the passage number in square brackets right after the fact, for example [1] or [2][3].\n- If the passages do not contain the answer, reply with exactly: NO_ANSWER\n- Never use outside knowledge and never guess numbers, dates or limits.\n- If passages conflict, say so briefly and cite both.\n- Be concise: 1 to 4 sentences or a short bullet list. Use Slack mrkdwn (*bold*)."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "820393f0-924d-40cc-98e4-654b94fd9c98",
+      "name": "Answer from context",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        800,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "8f08fc95-3d57-4145-b0ac-2da8964adfa4",
+      "name": "OpenAI Chat Model (answer)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.text.trim().length > 0 && !$json.text.includes(\"NO_ANSWER\") }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d2298575-9e30-477c-a68d-5ba2880b0dd3",
+      "name": "Found an answer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $('Build context').first().json;\nconst ans = String($input.first().json.text || '').trim();\nconst cited = Array.from(new Set(Array.from(ans.matchAll(/\\[(\\d+)\\]/g)).map(m => Number(m[1]))));\nconst names = Array.from(new Set(cited.map(n => (b.chunks.find(c => c.n === n) || {}).source).filter(Boolean)));\nconst blocks = [\n  { type: 'section', text: { type: 'mrkdwn', text: ans } },\n  { type: 'context', elements: [{ type: 'mrkdwn', text: ':books: Sources: ' + (names.join(', ') || 'knowledge base') + ' | answered only from indexed company documents' }] }\n];\nreturn [{ json: { blocks: JSON.stringify({ blocks }), sources: names.join(', ') || 'knowledge base' } }];\n"
+      },
+      "id": "34e12863-db18-4af1-b651-3647e885ab7f",
+      "name": "Build Slack reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Called by Router (knowledge)\").first().json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocks }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $(\"Called by Router (knowledge)\").first().json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "c3e94cd9-6d0a-47a4-ba69-9d08ce830054",
+      "name": "Reply with answer",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1600,
+        16
+      ],
+      "webhookId": "c90c1609-ea50-4976-8432-0cef83cdcdb1",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Knowledge Bot",
+            "Action": "Question answered with citations (read-only)",
+            "Target": "={{ $(\"Build context\").first().json.question }}",
+            "Approved by": "n/a (read-only)",
+            "Result": "=Sources: {{ $(\"Build Slack reply\").first().json.sources }}",
+            "Cost EUR (est.)": "={{ (() => { const b = $('Build context').first().json; const i = Math.ceil(((b.question||'').length + (b.context||'').length + 640) / 4); const o = Math.ceil((($('Answer from context').first().json.text)||'').length / 4); const q = Math.ceil((b.question||'').length / 4); return +((i*0.15 + o*0.60 + q*0.02) / 1e6 * 0.92).toFixed(6); })() }}",
+            "Tokens in (est.)": "={{ (() => { const b = $('Build context').first().json; return Math.ceil(((b.question||'').length + (b.context||'').length + 640) / 4); })() }}",
+            "Tokens out (est.)": "={{ Math.ceil((($('Answer from context').first().json.text)||'').length / 4) }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens in (est.)",
+              "id": "Tokens in (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens out (est.)",
+              "id": "Tokens out (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Cost EUR (est.)",
+              "id": "Cost EUR (est.)",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cf235458-a131-4e15-8cf0-e75d037ee731",
+      "name": "Log answered",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1824,
+        16
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Called by Router (knowledge)\").first().json.channel }}"
+        },
+        "text": ":mag: I could not find that in the company documents, so I will not guess. Try rephrasing, or ask HR or IT directly. I can search the IT Security, Expense and Travel, Onboarding, Remote Work and Product FAQ documents.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $(\"Called by Router (knowledge)\").first().json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "d50049b6-6b0b-4119-9dd1-0bde9207168a",
+      "name": "Reply no answer",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1376,
+        208
+      ],
+      "webhookId": "5fc90394-b93f-4ef2-812f-802066f0e81f",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Knowledge Bot",
+            "Action": "Question declined (no supporting document)",
+            "Target": "={{ $(\"Build context\").first().json.question }}",
+            "Approved by": "n/a (read-only)",
+            "Result": "=No answer in {{ $(\"Build context\").first().json.hits }} retrieved passages",
+            "Cost EUR (est.)": "={{ (() => { const b = $('Build context').first().json; const i = Math.ceil(((b.question||'').length + (b.context||'').length + 640) / 4); const o = Math.ceil((($('Answer from context').first().json.text)||'').length / 4); const q = Math.ceil((b.question||'').length / 4); return +((i*0.15 + o*0.60 + q*0.02) / 1e6 * 0.92).toFixed(6); })() }}",
+            "Tokens in (est.)": "={{ (() => { const b = $('Build context').first().json; return Math.ceil(((b.question||'').length + (b.context||'').length + 640) / 4); })() }}",
+            "Tokens out (est.)": "={{ Math.ceil((($('Answer from context').first().json.text)||'').length / 4) }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens in (est.)",
+              "id": "Tokens in (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens out (est.)",
+              "id": "Tokens out (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Cost EUR (est.)",
+              "id": "Cost EUR (est.)",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aeec94a3-3144-4edf-a257-3059933ea09b",
+      "name": "Log declined",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1600,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Called by Router (knowledge)": {
+      "main": [
+        [
+          {
+            "node": "Search knowledge base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search knowledge base": {
+      "main": [
+        [
+          {
+            "node": "Build context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings (query)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search knowledge base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build context": {
+      "main": [
+        [
+          {
+            "node": "Answer from context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer from context": {
+      "main": [
+        [
+          {
+            "node": "Found an answer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (answer)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer from context",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Found an answer?": {
+      "main": [
+        [
+          {
+            "node": "Build Slack reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply no answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack reply": {
+      "main": [
+        [
+          {
+            "node": "Reply with answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply with answer": {
+      "main": [
+        [
+          {
+            "node": "Log answered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply no answer": {
+      "main": [
+        [
+          {
+            "node": "Log declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "14e90FSSINOYHY9n",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "3638f7df-3144-4b08-8ab1-141cb66e1a71",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "9orDJ3PHV0oPAN0G",
+  "tags": []
+}

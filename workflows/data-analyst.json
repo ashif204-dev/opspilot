@@ -1,0 +1,743 @@
+{
+  "name": "Data Analyst",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "user"
+            },
+            {
+              "name": "channel"
+            },
+            {
+              "name": "thread_ts"
+            }
+          ]
+        }
+      },
+      "id": "feb8a408-4985-4572-ae66-d777f0ba38b6",
+      "name": "Called by Router (analytics)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sales"
+        },
+        "options": {}
+      },
+      "id": "0e45d125-8855-4c21-8de9-892398ce2504",
+      "name": "Read Sales",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        256
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Read Sales').all().map(i => i.json).filter(r => r['Order ID']);\nfunction toIso(v) {\n  if (v === undefined || v === null || v === '') return '';\n  if (typeof v === 'number') { return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10); }\n  return String(v).slice(0, 10);\n}\nconst dates = rows.map(r => toIso(r['Date'])).filter(Boolean).sort();\nconst distinct = (col) => Array.from(new Set(rows.map(r => String(r[col]).trim()))).sort();\nconst schema = [\n  'Table: Sales (one row per order, ' + rows.length + ' rows)',\n  'Columns:',\n  '- Order ID (text)',\n  '- Date (YYYY-MM-DD, from ' + dates[0] + ' to ' + dates[dates.length - 1] + ')',\n  '- Region (text): ' + distinct('Region').join(', '),\n  '- Product (text): ' + distinct('Product').join(', '),\n  '- Channel (text): ' + distinct('Channel').join(', '),\n  '- Units (number)',\n  '- Revenue (number, USD)',\n  '- Cost (number, USD)',\n  'Derived metrics available: revenue, cost, profit (revenue - cost), margin_pct (profit / revenue * 100), units, orders (row count), avg_order_value (revenue / orders).'\n].join('\\n');\nreturn [{ json: { schema, rowCount: rows.length } }];\n"
+      },
+      "id": "cadf145a-c58f-42f8-9009-da57daed0517",
+      "name": "Build schema summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today is {{ $now.toFormat(\"yyyy-MM-dd cccc\") }}.\n\n{{ $json.schema }}\n\nQuestion: {{ $(\"Called by Router (analytics)\").first().json.text }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a careful data analyst planner. You do NOT calculate anything; you only translate the question into a query plan over the Sales table described below.\nRules:\n- answerable=false if the question needs data not in the table (customers, forecasts, causes, other companies, anything outside the columns) or is not about this sales data. Put a short reason.\n- metric: one of revenue, cost, profit, margin_pct, units, orders, avg_order_value.\n- group_by: one of none, Region, Product, Channel, month. Use month for trends or month over month.\n- filter_region / filter_product / filter_channel: arrays using exact values from the schema, empty array if no filter.\n- date_from / date_to: YYYY-MM-DD inclusive, resolved relative to today (for example last month = the full previous calendar month), or empty string.\n- top_n: number of top groups wanted (0 for all). sort: desc or asc.\n- chart: bar, line or pie when the person asks for a chart or the answer is a comparison/trend across groups; otherwise none. Use line for month trends.\n- reason: empty string when answerable."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "c53121ec-6a15-4223-80e3-f8de86a020c2",
+      "name": "Plan query",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "397a7328-72ff-49fc-a8bd-80f631811f57",
+      "name": "OpenAI Chat Model (planner)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        512
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"answerable\": true, \"reason\": \"\", \"metric\": \"revenue\", \"group_by\": \"Region\", \"filter_region\": [], \"filter_product\": [], \"filter_channel\": [], \"date_from\": \"2026-10-01\", \"date_to\": \"2026-10-31\", \"top_n\": 0, \"sort\": \"desc\", \"chart\": \"bar\" }"
+      },
+      "id": "71b56358-c453-4c3d-b2c3-6b5af3f13a9b",
+      "name": "Query plan parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $input.first().json.output || {};\nconst rows = $('Read Sales').all().map(i => i.json).filter(r => r['Order ID']);\nfunction toIso(v) {\n  if (typeof v === 'number') { return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10); }\n  return String(v).slice(0, 10);\n}\nconst num = (v) => { const n = Number(String(v).replace(/[^0-9.\\-]/g, '')); return isNaN(n) ? 0 : n; };\nconst fail = (reason) => [{ json: { ok: false, reason, plan } }];\n\nif (!plan.answerable) return fail(plan.reason || 'The question needs data that is not in the Sales table.');\n\nconst METRICS = ['revenue', 'cost', 'profit', 'margin_pct', 'units', 'orders', 'avg_order_value'];\nconst GROUPS = ['none', 'Region', 'Product', 'Channel', 'month'];\nconst metric = String(plan.metric || '').toLowerCase();\nif (METRICS.indexOf(metric) < 0) return fail('Unsupported metric: ' + plan.metric);\nconst groupBy = GROUPS.indexOf(plan.group_by) >= 0 ? plan.group_by : 'none';\n\nconst distinct = (col) => Array.from(new Set(rows.map(r => String(r[col]).trim())));\nconst filters = [];\nconst fcols = [['Region', plan.filter_region], ['Product', plan.filter_product], ['Channel', plan.filter_channel]];\nconst active = {};\nfor (const pair of fcols) {\n  const col = pair[0];\n  const wanted = Array.isArray(pair[1]) ? pair[1].filter(x => String(x).trim()) : [];\n  if (!wanted.length) continue;\n  const known = distinct(col);\n  const matched = [];\n  for (const w of wanted) {\n    const hit = known.find(k => k.toLowerCase() === String(w).trim().toLowerCase());\n    if (!hit) return fail('There is no ' + col + ' called \"' + w + '\" in the data. Available: ' + known.join(', ') + '.');\n    matched.push(hit);\n  }\n  active[col] = matched;\n  filters.push(col + ' = ' + matched.join(' / '));\n}\nconst from = /^\\d{4}-\\d{2}-\\d{2}$/.test(plan.date_from || '') ? plan.date_from : '';\nconst to = /^\\d{4}-\\d{2}-\\d{2}$/.test(plan.date_to || '') ? plan.date_to : '';\nif (from) filters.push('from ' + from);\nif (to) filters.push('to ' + to);\n\nconst sel = rows.filter(r => {\n  const d = toIso(r['Date']);\n  if (from && d < from) return false;\n  if (to && d > to) return false;\n  for (const col of Object.keys(active)) { if (active[col].indexOf(String(r[col]).trim()) < 0) return false; }\n  return true;\n});\nif (!sel.length) return fail('No orders match those filters (' + (filters.join(', ') || 'none') + ').');\n\nconst groups = {};\nfor (const r of sel) {\n  const key = groupBy === 'none' ? 'Total' : groupBy === 'month' ? toIso(r['Date']).slice(0, 7) : String(r[groupBy]).trim();\n  if (!groups[key]) groups[key] = { revenue: 0, cost: 0, units: 0, orders: 0 };\n  groups[key].revenue += num(r['Revenue']);\n  groups[key].cost += num(r['Cost']);\n  groups[key].units += num(r['Units']);\n  groups[key].orders += 1;\n}\nconst val = (g) => {\n  const profit = g.revenue - g.cost;\n  switch (metric) {\n    case 'revenue': return g.revenue;\n    case 'cost': return g.cost;\n    case 'profit': return profit;\n    case 'margin_pct': return g.revenue ? (profit / g.revenue) * 100 : 0;\n    case 'units': return g.units;\n    case 'orders': return g.orders;\n    default: return g.orders ? g.revenue / g.orders : 0;\n  }\n};\nlet table = Object.keys(groups).map(k => ({ label: k, value: Math.round(val(groups[k]) * 100) / 100, orders: groups[k].orders }));\nif (groupBy === 'month') {\n  table.sort((a, b) => (a.label < b.label ? -1 : 1));\n} else {\n  table.sort((a, b) => (plan.sort === 'asc' ? a.value - b.value : b.value - a.value));\n}\nconst topN = Math.max(0, Math.min(Number(plan.top_n) || 0, 50));\nif (topN && groupBy !== 'none') table = table.slice(0, topN);\n\nconst isMoney = ['revenue', 'cost', 'profit', 'avg_order_value'].indexOf(metric) >= 0;\nconst unit = isMoney ? 'USD' : metric === 'margin_pct' ? '%' : metric;\n\nlet chartUrl = '';\nconst chartType = ['bar', 'line', 'pie'].indexOf(plan.chart) >= 0 ? plan.chart : 'none';\nif (chartType !== 'none' && groupBy !== 'none' && table.length > 1) {\n  const cfg = {\n    type: chartType === 'bar' ? 'bar' : chartType,\n    data: { labels: table.map(t => t.label), datasets: [{ label: metric + ' (' + unit + ')', data: table.map(t => t.value), backgroundColor: '#2563eb', borderColor: '#2563eb', fill: false }] },\n    options: { plugins: { legend: { display: chartType === 'pie' } }, title: { display: true, text: metric + (groupBy === 'none' ? '' : ' by ' + groupBy) } }\n  };\n  chartUrl = 'https://quickchart.io/chart?w=700&h=380&bkg=white&c=' + encodeURIComponent(JSON.stringify(cfg));\n}\nreturn [{ json: {\n  ok: true, metric, unit, groupBy, filters: filters.length ? filters.join(', ') : 'none',\n  ordersMatched: sel.length, table, chartUrl,\n  question: $('Called by Router (analytics)').first().json.text\n} }];\n"
+      },
+      "id": "a35a1374-c77a-415e-9af3-a3a0b0e1acbd",
+      "name": "Run analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "17627429-6d81-430b-bde6-8a2c16af5b6e",
+      "name": "Answerable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Question: {{ $json.question }}\n\nComputed result (JSON):\n{{ JSON.stringify({ metric: $json.metric, unit: $json.unit, group_by: $json.groupBy, filters: $json.filters, orders_matched: $json.ordersMatched, table: $json.table.slice(0, 15) }) }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You explain a computed analytics result to a colleague in Slack. Use ONLY the numbers in the result JSON and copy each one exactly as written: never calculate, round, rescale or invent numbers, and never add zeros or change a number's size. In 2 to 4 short sentences: answer the question directly, name the metric, the period and any filters used (from the filters field), and mention the top or notable item if there is a table. Use Slack mrkdwn (*bold*), USD with $ for money."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "18ff3e09-488d-4830-b84e-1e0856f1960c",
+      "name": "Explain result",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1472,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "b4391b86-e097-472f-92ce-2639cde00eca",
+      "name": "OpenAI Chat Model (explainer)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1552,
+        224
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Run analysis').first().json;\nconst raw = String($input.first().json.text || '');\nconst fmt = (v) => {\n  if (r.unit === 'USD') return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n  if (r.unit === '%') return Number(v).toFixed(1) + '%';\n  return Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });\n};\nconst norm = (s) => String(s).replace(/,/g, '').replace(/\\.0+$/, '');\nconst allowed = {};\nconst add = (v) => { const n = Number(v); if (!isNaN(n)) { allowed[norm(n)] = 1; allowed[norm(n.toFixed(2))] = 1; allowed[norm(n.toFixed(1))] = 1; allowed[norm(Math.round(n))] = 1; } };\nr.table.forEach((t) => { add(t.value); add(t.orders); });\nadd(r.ordersMatched);\nadd(r.table.length);\nString(r.filters || '').split(/[^0-9.]+/).forEach((x) => { if (x) allowed[norm(x)] = 1; });\nString(r.question || '').split(/[^0-9.]+/).forEach((x) => { if (x) allowed[norm(x)] = 1; });\nconst found = raw.match(/\\d[\\d,]*\\.?\\d*/g) || [];\nlet bad = false;\nfor (const f of found) { const k = norm(f.replace(/\\.$/, '')); const y = Number(k); if (allowed[k]) continue; if (y >= 2000 && y <= 2100) continue; bad = true; }\nconst fallback = '*' + r.metric + (r.groupBy !== 'none' ? ' by ' + r.groupBy : '') + '*: ' + r.table.slice(0, 5).map((t) => t.label + ' ' + fmt(t.value)).join(', ') + ' (' + r.ordersMatched + ' orders; filters: ' + r.filters + ').';\nconst answer = (bad || !raw.trim()) ? fallback : raw;\nconst blocks = [];\nblocks.push({ type: 'section', text: { type: 'mrkdwn', text: answer } });\nif (r.groupBy !== 'none' && r.table.length > 1) {\n  const w = Math.max.apply(null, r.table.map(t => t.label.length));\n  const lines = r.table.slice(0, 12).map(t => t.label.padEnd(w) + '  ' + fmt(t.value));\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '```' + lines.join('\\n') + '```' } });\n}\nif (r.chartUrl) blocks.push({ type: 'image', image_url: r.chartUrl, alt_text: 'Chart of ' + r.metric });\nblocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':bar_chart: Computed from the Sales sheet (' + r.ordersMatched + ' orders) | metric: ' + r.metric + ' | filters: ' + r.filters + ' | read-only' + (bad ? ' | summary generated from the table (AI wording had a number that did not match)' : '') }] });\nreturn [{ json: { blocks: JSON.stringify({ blocks }), answer, used_fallback: bad } }];\n"
+      },
+      "id": "123f3c06-b4a3-45e2-a2c4-07f4e25a49aa",
+      "name": "Build Slack reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Called by Router (analytics)\").first().json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocks }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $(\"Called by Router (analytics)\").first().json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "5be6a4f6-0c15-4005-a823-be414f6a59f7",
+      "name": "Reply with answer",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        2048,
+        112
+      ],
+      "webhookId": "f231e31f-f248-4496-8f64-217c9c77fef1",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Data Analyst",
+            "Action": "Question answered (read-only)",
+            "Target": "={{ $(\"Run analysis\").first().json.question }}",
+            "Approved by": "n/a (read-only)",
+            "Result": "={{ $(\"Run analysis\").first().json.metric }} by {{ $(\"Run analysis\").first().json.groupBy }}; filters: {{ $(\"Run analysis\").first().json.filters }}; {{ $(\"Run analysis\").first().json.ordersMatched }} orders",
+            "Cost EUR (est.)": "={{ (() => { const r = $('Run analysis').first().json; const s = ($('Build schema summary').first().json.schema || '').length; const q = (r.question || '').length; const planIn = s + q + 1900; const expIn = JSON.stringify({ metric: r.metric, unit: r.unit, group_by: r.groupBy, filters: r.filters, orders_matched: r.ordersMatched, table: (r.table || []).slice(0, 15) }).length + q + 560; const i = Math.ceil((planIn + expIn) / 4); const p = JSON.stringify($('Plan query').first().json.output || {}).length; const a = String($('Build Slack reply').first().json.answer || '').length; const o = Math.ceil((p + a) / 4); return +((i * 0.15 + o * 0.60) / 1e6 * 0.92).toFixed(6); })() }}",
+            "Tokens in (est.)": "={{ (() => { const r = $('Run analysis').first().json; const s = ($('Build schema summary').first().json.schema || '').length; const q = (r.question || '').length; const planIn = s + q + 1900; const expIn = JSON.stringify({ metric: r.metric, unit: r.unit, group_by: r.groupBy, filters: r.filters, orders_matched: r.ordersMatched, table: (r.table || []).slice(0, 15) }).length + q + 560; return Math.ceil((planIn + expIn) / 4); })() }}",
+            "Tokens out (est.)": "={{ (() => { const p = JSON.stringify($('Plan query').first().json.output || {}).length; const a = String($('Build Slack reply').first().json.answer || '').length; return Math.ceil((p + a) / 4); })() }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens in (est.)",
+              "id": "Tokens in (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens out (est.)",
+              "id": "Tokens out (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Cost EUR (est.)",
+              "id": "Cost EUR (est.)",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2c657f81-3d04-4502-8ccd-a89cdabb19d1",
+      "name": "Log answered",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2272,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Called by Router (analytics)\").first().json.channel }}"
+        },
+        "text": "=:no_entry_sign: I cannot answer that from the Sales data. {{ $json.reason }}\nTry something like: _revenue by region last month_, _top 3 products by profit_, or _online sales month over month as a chart_.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $(\"Called by Router (analytics)\").first().json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "dd38b742-16e5-45d3-9e5d-84a09b992c31",
+      "name": "Reply cannot answer",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1536,
+        400
+      ],
+      "webhookId": "18ad0ebf-4b80-4411-bbc8-b8656cfcaca2",
+      "credentials": {
+        "slackApi": {
+          "id": "F9YttzyYYLcbMktv",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Data Analyst",
+            "Action": "Question declined (not answerable from data)",
+            "Target": "={{ $(\"Called by Router (analytics)\").first().json.text }}",
+            "Approved by": "n/a (read-only)",
+            "Result": "={{ $(\"Run analysis\").first().json.reason }}",
+            "Cost EUR (est.)": "={{ (() => { const i = Math.ceil((($('Build schema summary').first().json.schema || '').length + String($('Called by Router (analytics)').first().json.text || '').length + 1900) / 4); const o = Math.ceil(JSON.stringify($('Plan query').first().json.output || {}).length / 4); return +((i * 0.15 + o * 0.60) / 1e6 * 0.92).toFixed(6); })() }}",
+            "Tokens in (est.)": "={{ Math.ceil((($('Build schema summary').first().json.schema || '').length + String($('Called by Router (analytics)').first().json.text || '').length + 1900) / 4) }}",
+            "Tokens out (est.)": "={{ Math.ceil(JSON.stringify($('Plan query').first().json.output || {}).length / 4) }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Time",
+              "id": "Time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Workflow",
+              "id": "Workflow",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Action",
+              "id": "Action",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Target",
+              "id": "Target",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Approved by",
+              "id": "Approved by",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Result",
+              "id": "Result",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens in (est.)",
+              "id": "Tokens in (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Tokens out (est.)",
+              "id": "Tokens out (est.)",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "Cost EUR (est.)",
+              "id": "Cost EUR (est.)",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cda13026-cf6f-4eab-a06e-87a5205c9015",
+      "name": "Log declined",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1824,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Called by Router (analytics)": {
+      "main": [
+        [
+          {
+            "node": "Read Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sales": {
+      "main": [
+        [
+          {
+            "node": "Build schema summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build schema summary": {
+      "main": [
+        [
+          {
+            "node": "Plan query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan query": {
+      "main": [
+        [
+          {
+            "node": "Run analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (planner)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Plan query",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query plan parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Plan query",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run analysis": {
+      "main": [
+        [
+          {
+            "node": "Answerable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answerable?": {
+      "main": [
+        [
+          {
+            "node": "Explain result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply cannot answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explain result": {
+      "main": [
+        [
+          {
+            "node": "Build Slack reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (explainer)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Explain result",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack reply": {
+      "main": [
+        [
+          {
+            "node": "Reply with answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply with answer": {
+      "main": [
+        [
+          {
+            "node": "Log answered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply cannot answer": {
+      "main": [
+        [
+          {
+            "node": "Log declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "14e90FSSINOYHY9n",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "81b5eec2-1057-4960-8cbf-591ddae32c0a",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "85qoQ9NNA2OzCx8x",
+  "tags": []
+}

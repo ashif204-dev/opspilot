@@ -1,0 +1,255 @@
+{
+  "name": "Shared Guardrails",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "mode"
+            },
+            {
+              "name": "source"
+            }
+          ]
+        }
+      },
+      "id": "854b3c5e-d88c-4605-beb1-78b9d21a6244",
+      "name": "Called by any bot",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp = $input.first().json;\nconst text = String(inp.text == null ? '' : inp.text);\nconst mode = inp.mode === 'output' ? 'output' : 'input';\nconst source = String(inp.source || 'unknown');\nlet lower = text.toLowerCase();\nlower = lower.replace(/\\b(?:[a-z][\\s.\\-_]){3,}[a-z]\\b/g, (m) => m.replace(/[\\s.\\-_]/g, ''));\nconst reasons = [];\nconst pii = [];\n\nconst injection = [\n  [/ignore\\s+(all\\s+|any\\s+)?(the\\s+)?(previous|prior|above|earlier)\\s+(instructions?|rules|prompts?)/, 'ignore-previous-instructions'],\n  [/(ignore|disregard|forget)\\s+(all\\s+)?(your|the|these)\\s+(rules|instructions|guidelines)/, 'ignore-your-rules'],\n  [/disregard\\s+(all\\s+|any\\s+)?(the\\s+)?(previous|prior|above)/, 'disregard-previous'],\n  [/(set\\s+aside|forget|drop|discard|dismiss|abandon)\\s+(about\\s+)?(everything|all|anything)\\s+(that\\s+)?(you|your|i|we|was|were)/, 'paraphrase-forget'],\n  [/(just\\s+)?do\\s+(exactly\\s+)?what\\s+i\\s+(say|tell|command)/, 'obey-me'],\n  [/(reveal|show|print|repeat|display|leak)\\s+(me\\s+)?(your|the)\\s+(system\\s+)?(prompt|instructions)/, 'reveal-prompt'],\n  [/reply\\s+with\\s+.{0,40}\\b(hacked|is_task)\\b/, 'forced-output'],\n  [/score\\s+(this\\s+candidate|me|them)\\s+(as\\s+)?100/, 'forced-score'],\n  [/\\b(developer|jailbreak|dan)\\s+mode\\b/, 'jailbreak-mode'],\n  [/override\\s+(the\\s+)?(system|safety|your)\\s*(rules|prompt|instructions)?/, 'override-system'],\n  [/\\bnew\\s+instructions?\\s*:/, 'new-instructions'],\n  [/you\\s+are\\s+now\\s+(a|an|in)\\b/, 'role-switch'],\n  [/(nirdesh|instructions?|rules?|niyam)\\s+(sab\\s+|saare\\s+|saari\\s+)?(bhool|bhul|ignore)/, 'hinglish-forget'],\n  [/(pichhle|pehle\\s+ke|purane)\\s+(saare\\s+)?(nirdesh|instructions?|niyam)/, 'hinglish-previous'],\n  [/(ignore|bhool)\\s+(karo|jao|do)\\b.{0,30}(instructions?|nirdesh|rules?)/, 'hinglish-ignore']\n];\nif (mode === 'input') {\n  for (const [re, name] of injection) { if (re.test(lower)) reasons.push('injection:' + name); }\n}\n\nif (mode === 'output') {\n  if (/\\bsk-[a-z0-9_-]{16,}/i.test(text)) reasons.push('leak:api-key');\n  if (/(api[ _-]?key|secret|password|token)\\s*[:=]\\s*\\S{6,}/i.test(text)) reasons.push('leak:credential');\n  if (/(my|the)\\s+system\\s+prompt\\s+(is|says)/i.test(text)) reasons.push('leak:system-prompt');\n}\n\nfunction luhn(digits) {\n  let sum = 0, alt = false;\n  for (let i = digits.length - 1; i >= 0; i--) {\n    let n = Number(digits[i]);\n    if (alt) { n *= 2; if (n > 9) n -= 9; }\n    sum += n; alt = !alt;\n  }\n  return sum % 10 === 0;\n}\nlet clean = text;\nclean = clean.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/g, () => { pii.push('email'); return '[EMAIL]'; });\nclean = clean.replace(/[A-Za-z0-9._%+-]+\\s*(?:\\[at\\]|\\(at\\)|\\sat\\s)\\s*[A-Za-z0-9-]+\\s*(?:\\[dot\\]|\\(dot\\)|\\sdot\\s)\\s*[A-Za-z]{2,}/gi, () => { pii.push('email'); return '[EMAIL]'; });\nclean = clean.replace(/\\b(?:\\d[ -]?){13,16}\\b/g, (m) => {\n  const d = m.replace(/[^0-9]/g, '');\n  if (d.length >= 13 && d.length <= 16 && luhn(d)) { pii.push('card'); return '[CARD]'; }\n  return m;\n});\nclean = clean.replace(/\\b\\d{4}[ -]?\\d{4}[ -]?\\d{4}\\b/g, () => { pii.push('aadhaar'); return '[AADHAAR]'; });\nclean = clean.replace(/\\b[A-Z]{5}\\d{4}[A-Z]\\b/g, () => { pii.push('pan'); return '[PAN]'; });\nclean = clean.replace(/(?:\\+91[ -]?|\\b0)?\\b[6-9]\\d{4}[ -]?\\d{5}\\b/g, () => { pii.push('phone'); return '[PHONE]'; });\nclean = clean.replace(/(?:\\+91[ -]?|\\b0)?\\b[6-9]\\d{9}\\b/g, () => { pii.push('phone'); return '[PHONE]'; });\nclean = clean.replace(/\\+\\d{1,3}[ -]?\\d{2,4}[ -]?\\d{3,4}[ -]?\\d{3,4}\\b/g, () => { pii.push('phone'); return '[PHONE]'; });\n\nlet verdict = 'allow';\nif (reasons.length) verdict = 'block';\nelse if (pii.length) { verdict = 'redact'; reasons.push('pii:' + Array.from(new Set(pii)).join(',')); }\nif (verdict === 'block' && pii.length) reasons.push('pii:' + Array.from(new Set(pii)).join(','));\n\nreturn [{ json: {\n  verdict,\n  reasons,\n  clean_text: verdict === 'block' ? '' : clean,\n  pii_found: Array.from(new Set(pii)),\n  mode,\n  source,\n  length: text.length\n} }];"
+      },
+      "id": "9822eedc-5613-4f50-abaa-cbc8c447f1fe",
+      "name": "Scan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.verdict !== \"allow\" && $json.source !== \"eval\" }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f3504b76-311c-443f-996c-6088e24f77ba",
+      "name": "Needs audit entry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1YluiU6rqbEqVnPS6aIgc8BoT1fmZIHwd8azQy9FF0u0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Time": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Workflow": "Guardrails",
+            "Action": "={{ $json.mode === \"output\" ? \"Output \" : \"Input \" }}{{ $json.verdict }}",
+            "Target": "={{ $json.source }}: {{ $json.reasons.join(\"; \") }}",
+            "Approved by": "auto",
+            "Result": "={{ $json.verdict === \"block\" ? \"Blocked\" : \"Redacted\" }}"
+          },
+          "schema": [
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Action",
+              "displayName": "Action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target",
+              "displayName": "Target",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Approved by",
+              "displayName": "Approved by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ef02092a-f33a-4266-92d4-e648f90e7054",
+      "name": "Log guardrail event",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kIaJm5ELiobl4u9l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Scan').first().json }];"
+      },
+      "id": "6d55e9ca-cffb-43f0-8278-9f73720e8e3f",
+      "name": "Return verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        80
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Called by any bot": {
+      "main": [
+        [
+          {
+            "node": "Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan": {
+      "main": [
+        [
+          {
+            "node": "Needs audit entry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs audit entry?": {
+      "main": [
+        [
+          {
+            "node": "Log guardrail event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log guardrail event": {
+      "main": [
+        [
+          {
+            "node": "Return verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "ab61a9d7-2faf-4ef5-8bf7-ed95a3a312da",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "4ad2f7e4f21ed92657777f2c026b98c6226001ef723fd2563c231425abd3a69f"
+  },
+  "nodeGroups": [],
+  "id": "XWvJhpbY3EBzGqIY",
+  "tags": []
+}
